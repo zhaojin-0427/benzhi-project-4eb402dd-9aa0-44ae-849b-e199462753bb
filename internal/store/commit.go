@@ -26,12 +26,6 @@ func (s *FileStore) Commit(request CommitRequest) error {
 	}
 	var responseBody []byte
 	if request.IdempotencyKey != "" {
-		s.mu.RLock()
-		existing, ok := s.idempotency[request.IdempotencyKey]
-		s.mu.RUnlock()
-		if ok && (existing.BatchID != request.Aggregate.Batch.ID || existing.Operation != request.Operation) {
-			return ErrIdempotencyConflict
-		}
 		body, err := json.Marshal(request.Response)
 		if err != nil {
 			return err
@@ -40,6 +34,12 @@ func (s *FileStore) Commit(request CommitRequest) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if request.IdempotencyKey != "" {
+		existing, ok := s.idempotency[request.IdempotencyKey]
+		if ok && (existing.BatchID != request.Aggregate.Batch.ID || existing.Operation != request.Operation) {
+			return ErrIdempotencyConflict
+		}
+	}
 	current, exists := s.batches[request.Aggregate.Batch.ID]
 	if !exists {
 		if request.ExpectedVersion != 0 {
