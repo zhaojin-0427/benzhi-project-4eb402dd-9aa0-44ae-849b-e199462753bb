@@ -8,6 +8,7 @@ import (
 	"sort"
 	"soundledger/internal/audit"
 	"soundledger/internal/domain"
+	"strings"
 	"sync"
 )
 
@@ -87,6 +88,45 @@ func (s *FileStore) Idempotency(key string) (IdempotencyRecord, bool) {
 	defer s.mu.RUnlock()
 	record, ok := s.idempotency[key]
 	return record, ok
+}
+
+// ReleaseObject removes the content-addressed object identified by digest when
+// no persisted aggregate references it. It is used to clean up objects written
+// for uploads that fail before or during commit. The reference scan and removal
+// happen under the store write lock so that a concurrent successful upload of
+// the same digest cannot be deleted.
+func (s *FileStore) ReleaseObject(digest string) {
+	if digest == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.objectReferencedLocked(digest) {
+		return
+	}
+	clean := filepath.Clean(digest)
+	if clean == "." || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return
+	}
+	target := filepath.Join(s.objectDir, clean[:2], clean)
+	if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+		return
+	}
+	dir := filepath.Dir(target)
+	_ = os.Remove(dir)
+}
+
+// objectReferencedLocked reports whether any batch aggregate currently holds a
+// clip whose SHA-256 equals digest. Callers must hold s.mu (read or write).
+func (s *FileStore) objectReferencedLocked(digest string) bool {
+	for _, aggregate := range s.batches {
+		for _, clip := range aggregate.Clips {
+			if clip.SHA256 == digest {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func cloneAggregate(source *domain.Aggregate) (*domain.Aggregate, error) {

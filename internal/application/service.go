@@ -97,14 +97,27 @@ func (s *Service) UploadClip(command UploadClipCommand) (UploadResult, error) {
 		if err != nil {
 			return nil, domain.FieldError("audio", err.Error())
 		}
+		released := false
+		releaseObject := func() {
+			if released {
+				return
+			}
+			released = true
+			s.store.ReleaseObject(object.SHA256)
+		}
 		clip := domain.AudioClip{ID: command.ClipID, BatchID: command.BatchID, SHA256: object.SHA256, ObjectPath: object.Path, MediaType: command.MediaType, ByteSize: object.Size, RecordedAt: command.RecordedAt.UTC(), DurationMillis: command.DurationMillis, RecorderCode: command.RecorderCode, HabitatNote: command.HabitatNote}
 		now := s.clock().UTC()
 		if err = aggregate.AddClip(clip, now); err != nil {
+			releaseObject()
 			return nil, err
 		}
 		result := UploadResult{Batch: aggregate.Batch, Clip: clip}
 		err = s.store.Commit(store.CommitRequest{Aggregate: aggregate, ExpectedVersion: command.Meta.ExpectedVersion, EventType: "clip.uploaded", ActorID: command.Meta.ActorID, RequestID: command.Meta.RequestID, Payload: clip, IdempotencyKey: command.Meta.IdempotencyKey, Operation: "upload_clip", Response: result, Status: 201, OccurredAt: now})
-		return result, mapStoreError(err)
+		if err != nil {
+			releaseObject()
+			return nil, mapStoreError(err)
+		}
+		return result, nil
 	})
 	if err != nil {
 		return UploadResult{}, err
