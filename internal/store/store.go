@@ -90,6 +90,34 @@ func (s *FileStore) Idempotency(key string) (IdempotencyRecord, bool) {
 }
 
 func cloneAggregate(source *domain.Aggregate) (*domain.Aggregate, error) {
-	copy := *source
-	return &copy, nil
+	clone := *source
+	clone.Batch.ValidationIssues = append([]string(nil), source.Batch.ValidationIssues...)
+	clone.Clips = append([]domain.AudioClip(nil), source.Clips...)
+	clone.Annotations = append([]domain.SpeciesAnnotation(nil), source.Annotations...)
+	clone.Consensus = make([]domain.Consensus, len(source.Consensus))
+	for i, c := range source.Consensus {
+		clone.Consensus[i] = c
+		clone.Consensus[i].SourceIDs = append([]string(nil), c.SourceIDs...)
+	}
+	clone.Disputes = make([]domain.AnnotationDispute, len(source.Disputes))
+	for i, d := range source.Disputes {
+		clone.Disputes[i] = d
+		clone.Disputes[i].ReasonCodes = append([]string(nil), d.ReasonCodes...)
+		clone.Disputes[i].AnnotationIDs = append([]string(nil), d.AnnotationIDs...)
+		if d.ResolvedAt != nil {
+			ts := *d.ResolvedAt
+			clone.Disputes[i].ResolvedAt = &ts
+		}
+	}
+	if source.Manifest != nil {
+		manifest := *source.Manifest
+		manifest.Clips = append([]domain.ManifestClip(nil), source.Manifest.Clips...)
+		manifest.Conclusions = append([]domain.ManifestConclusion(nil), source.Manifest.Conclusions...)
+		clone.Manifest = &manifest
+	}
+	if source.Certificate != nil {
+		certificate := *source.Certificate
+		clone.Certificate = &certificate
+	}
+	return &clone, nil
 }
