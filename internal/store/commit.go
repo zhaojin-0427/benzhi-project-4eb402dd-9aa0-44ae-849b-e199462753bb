@@ -24,13 +24,22 @@ func (s *FileStore) Commit(request CommitRequest) error {
 	if request.Aggregate == nil {
 		return fmt.Errorf("aggregate 不能为空")
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	var responseBody []byte
 	if request.IdempotencyKey != "" {
-		if existing, ok := s.idempotency[request.IdempotencyKey]; ok && (existing.BatchID != request.Aggregate.Batch.ID || existing.Operation != request.Operation) {
+		s.mu.RLock()
+		existing, ok := s.idempotency[request.IdempotencyKey]
+		s.mu.RUnlock()
+		if ok && (existing.BatchID != request.Aggregate.Batch.ID || existing.Operation != request.Operation) {
 			return ErrIdempotencyConflict
 		}
+		body, err := json.Marshal(request.Response)
+		if err != nil {
+			return err
+		}
+		responseBody = body
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	current, exists := s.batches[request.Aggregate.Batch.ID]
 	if !exists {
 		if request.ExpectedVersion != 0 {
@@ -76,11 +85,7 @@ func (s *FileStore) Commit(request CommitRequest) error {
 	s.chainHead = record.Hash
 	s.batches[snapshot.Batch.ID] = snapshot
 	if request.IdempotencyKey != "" {
-		body, marshalErr := json.Marshal(request.Response)
-		if marshalErr != nil {
-			return marshalErr
-		}
-		rec := IdempotencyRecord{Key: request.IdempotencyKey, BatchID: snapshot.Batch.ID, Operation: request.Operation, Status: request.Status, Response: body}
+		rec := IdempotencyRecord{Key: request.IdempotencyKey, BatchID: snapshot.Batch.ID, Operation: request.Operation, Status: request.Status, Response: responseBody}
 		s.idempotency[request.IdempotencyKey] = rec
 		if err = s.writeIdempotency(); err != nil {
 			return err
