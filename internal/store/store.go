@@ -21,9 +21,11 @@ type IdempotencyRecord struct {
 
 type FileStore struct {
 	mu                                                                 sync.RWMutex
+	verificationMu                                                     sync.RWMutex
 	root, objectDir, tmpDir, projectionDir, eventPath, idempotencyPath string
 	batches                                                            map[string]*domain.Aggregate
 	idempotency                                                        map[string]IdempotencyRecord
+	verifiedObjects                                                    map[string]objectVerification
 	events                                                             []audit.EventRecord
 	chainHead                                                          string
 }
@@ -32,7 +34,7 @@ func Open(root string) (*FileStore, error) {
 	if root == "" {
 		return nil, fmt.Errorf("数据目录不能为空")
 	}
-	s := &FileStore{root: root, objectDir: filepath.Join(root, "objects"), tmpDir: filepath.Join(root, "tmp"), projectionDir: filepath.Join(root, "projections"), eventPath: filepath.Join(root, "events.jsonl"), idempotencyPath: filepath.Join(root, "idempotency.json"), batches: map[string]*domain.Aggregate{}, idempotency: map[string]IdempotencyRecord{}}
+	s := &FileStore{root: root, objectDir: filepath.Join(root, "objects"), tmpDir: filepath.Join(root, "tmp"), projectionDir: filepath.Join(root, "projections"), eventPath: filepath.Join(root, "events.jsonl"), idempotencyPath: filepath.Join(root, "idempotency.json"), batches: map[string]*domain.Aggregate{}, idempotency: map[string]IdempotencyRecord{}, verifiedObjects: map[string]objectVerification{}}
 	for _, dir := range []string{s.root, s.objectDir, s.tmpDir, s.projectionDir} {
 		if err := os.MkdirAll(dir, 0750); err != nil {
 			return nil, err

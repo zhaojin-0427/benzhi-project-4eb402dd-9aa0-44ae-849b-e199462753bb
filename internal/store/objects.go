@@ -11,12 +11,19 @@ import (
 	"path/filepath"
 	"soundledger/internal/domain"
 	"strings"
+	"time"
 )
 
 type StoredObject struct {
 	SHA256 string
 	Path   string
 	Size   int64
+}
+
+type objectVerification struct {
+	size       int64
+	modifiedAt time.Time
+	digest     string
 }
 
 func (s *FileStore) PutObject(reader io.Reader, maxBytes int64) (StoredObject, error) {
@@ -63,7 +70,7 @@ func (s *FileStore) PutObject(reader io.Reader, maxBytes int64) (StoredObject, e
 		if info.Size() != size {
 			return StoredObject{}, fmt.Errorf("摘要对象大小冲突")
 		}
-		if err = verifyExistingObject(target, digest); err != nil {
+		if err = s.verifyExistingObject(target, digest, info); err != nil {
 			return StoredObject{}, err
 		}
 		return StoredObject{SHA256: digest, Path: relativeObjectPath(s.root, target), Size: size}, nil
@@ -80,7 +87,13 @@ func (s *FileStore) PutObject(reader io.Reader, maxBytes int64) (StoredObject, e
 	return StoredObject{SHA256: digest, Path: relativeObjectPath(s.root, target), Size: size}, nil
 }
 
-func verifyExistingObject(path, expectedDigest string) error {
+func (s *FileStore) verifyExistingObject(path, expectedDigest string, info os.FileInfo) error {
+	s.verificationMu.RLock()
+	cached, ok := s.verifiedObjects[path]
+	s.verificationMu.RUnlock()
+	if ok && cached.size == info.Size() && cached.modifiedAt.Equal(info.ModTime()) && cached.digest == expectedDigest {
+		return nil
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -93,6 +106,9 @@ func verifyExistingObject(path, expectedDigest string) error {
 	if hex.EncodeToString(hash.Sum(nil)) != expectedDigest {
 		return fmt.Errorf("已存在的内容寻址对象摘要校验失败")
 	}
+	s.verificationMu.Lock()
+	s.verifiedObjects[path] = objectVerification{size: info.Size(), modifiedAt: info.ModTime(), digest: expectedDigest}
+	s.verificationMu.Unlock()
 	return nil
 }
 
@@ -168,17 +184,8 @@ func (s *FileStore) verifyClip(clip domain.AudioClip) error {
 	if info.Size() != clip.ByteSize {
 		return fmt.Errorf("大小不一致，记录为 %d，实际为 %d", clip.ByteSize, info.Size())
 	}
-	hash := sha256.New()
-	count, err := io.Copy(hash, file)
-	if err != nil {
+	if err = s.verifyExistingObject(path, clip.SHA256, info); err != nil {
 		return err
-	}
-	if count != clip.ByteSize {
-		return fmt.Errorf("读取字节数不一致")
-	}
-	actual := hex.EncodeToString(hash.Sum(nil))
-	if actual != clip.SHA256 {
-		return fmt.Errorf("SHA-256 不一致")
 	}
 	if filepath.Base(path) != clip.SHA256 {
 		return fmt.Errorf("对象文件名与摘要不一致")
