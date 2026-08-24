@@ -1,6 +1,7 @@
 package application
 
 import (
+	"context"
 	"io"
 	"soundledger/internal/domain"
 	"time"
@@ -16,11 +17,12 @@ const (
 )
 
 type CommandMeta struct {
-	ActorID         string `json:"actorId"`
-	Role            Role   `json:"role"`
-	ExpectedVersion int64  `json:"expectedVersion"`
-	IdempotencyKey  string `json:"idempotencyKey"`
-	RequestID       string `json:"requestId"`
+	Context         context.Context `json:"-"`
+	ActorID         string          `json:"actorId"`
+	Role            Role            `json:"role"`
+	ExpectedVersion int64           `json:"expectedVersion"`
+	IdempotencyKey  string          `json:"idempotencyKey"`
+	RequestID       string          `json:"requestId"`
 }
 
 type CreateBatchCommand struct {

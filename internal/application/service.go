@@ -45,7 +45,7 @@ func (s *Service) CreateBatch(command CreateBatchCommand) (domain.SoundscapeBatc
 	if err := validateMeta(command.Meta, RoleAdministrator); err != nil {
 		return domain.SoundscapeBatch{}, err
 	}
-	value, err := s.mailboxes.forBatch(command.ID).do(func() (any, error) {
+	value, err := s.mailboxes.forBatch(command.ID).do(command.Meta.Context, func() (any, error) {
 		var cached domain.SoundscapeBatch
 		if ok, err := s.idempotent(command.Meta.IdempotencyKey, "create_batch", command.ID, &cached); ok || err != nil {
 			return cached, err
@@ -74,7 +74,7 @@ func (s *Service) UploadClip(command UploadClipCommand) (UploadResult, error) {
 	if err := validateMeta(command.Meta, RoleAdministrator); err != nil {
 		return UploadResult{}, err
 	}
-	value, err := s.mailboxes.forBatch(command.BatchID).do(func() (any, error) {
+	value, err := s.mailboxes.forBatch(command.BatchID).do(command.Meta.Context, func() (any, error) {
 		var cached UploadResult
 		if ok, err := s.idempotent(command.Meta.IdempotencyKey, "upload_clip", command.BatchID, &cached); ok || err != nil {
 			return cached, err
@@ -116,7 +116,7 @@ func (s *Service) SubmitAnnotation(command SubmitAnnotationCommand) (AnnotationR
 	if err := validateMeta(command.Meta, RoleAnnotator); err != nil {
 		return AnnotationResult{}, err
 	}
-	value, err := s.mailboxes.forBatch(command.BatchID).do(func() (any, error) {
+	value, err := s.mailboxes.forBatch(command.BatchID).do(command.Meta.Context, func() (any, error) {
 		var cached AnnotationResult
 		if ok, err := s.idempotent(command.Meta.IdempotencyKey, "submit_annotation", command.BatchID, &cached); ok || err != nil {
 			return cached, err
@@ -146,7 +146,7 @@ func (s *Service) ComputeConsensus(command ComputeConsensusCommand) (ConsensusRe
 	if err := validateMeta(command.Meta, RoleAdministrator); err != nil {
 		return ConsensusResult{}, err
 	}
-	value, err := s.mailboxes.forBatch(command.BatchID).do(func() (any, error) {
+	value, err := s.mailboxes.forBatch(command.BatchID).do(command.Meta.Context, func() (any, error) {
 		var cached ConsensusResult
 		if ok, err := s.idempotent(command.Meta.IdempotencyKey, "compute_consensus", command.BatchID, &cached); ok || err != nil {
 			return cached, err
@@ -173,7 +173,7 @@ func (s *Service) Arbitrate(command ArbitrateCommand) (ArbitrationResult, error)
 	if err := validateMeta(command.Meta, RoleArbiter); err != nil {
 		return ArbitrationResult{}, err
 	}
-	value, err := s.mailboxes.forBatch(command.BatchID).do(func() (any, error) {
+	value, err := s.mailboxes.forBatch(command.BatchID).do(command.Meta.Context, func() (any, error) {
 		var cached ArbitrationResult
 		if ok, err := s.idempotent(command.Meta.IdempotencyKey, "arbitrate", command.BatchID, &cached); ok || err != nil {
 			return cached, err
@@ -206,7 +206,7 @@ func (s *Service) Freeze(command FreezeCommand) (FreezeResult, error) {
 	if err := validateMeta(command.Meta, RoleAdministrator); err != nil {
 		return FreezeResult{}, err
 	}
-	value, err := s.mailboxes.forBatch(command.BatchID).do(func() (any, error) {
+	value, err := s.mailboxes.forBatch(command.BatchID).do(command.Meta.Context, func() (any, error) {
 		var cached FreezeResult
 		if ok, err := s.idempotent(command.Meta.IdempotencyKey, "freeze", command.BatchID, &cached); ok || err != nil {
 			return cached, err
@@ -249,7 +249,7 @@ func (s *Service) Publish(command PublishCommand) (PublishResult, error) {
 	if err := validateMeta(command.Meta, RolePublisher); err != nil {
 		return PublishResult{}, err
 	}
-	value, err := s.mailboxes.forBatch(command.BatchID).do(func() (any, error) {
+	value, err := s.mailboxes.forBatch(command.BatchID).do(command.Meta.Context, func() (any, error) {
 		var cached PublishResult
 		if ok, err := s.idempotent(command.Meta.IdempotencyKey, "publish", command.BatchID, &cached); ok || err != nil {
 			return cached, err

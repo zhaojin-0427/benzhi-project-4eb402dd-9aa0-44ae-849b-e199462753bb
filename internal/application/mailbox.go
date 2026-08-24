@@ -1,6 +1,9 @@
 package application
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 type mailbox struct{ requests chan mailboxRequest }
 type mailboxRequest struct {
@@ -34,9 +37,16 @@ func (m *mailbox) loop() {
 		request.answer <- mailboxAnswer{value, err}
 	}
 }
-func (m *mailbox) do(run func() (any, error)) (any, error) {
+func (m *mailbox) do(ctx context.Context, run func() (any, error)) (any, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	answer := make(chan mailboxAnswer, 1)
 	m.requests <- mailboxRequest{run: run, answer: answer}
-	result := <-answer
-	return result.value, result.err
+	select {
+	case result := <-answer:
+		return result.value, result.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }

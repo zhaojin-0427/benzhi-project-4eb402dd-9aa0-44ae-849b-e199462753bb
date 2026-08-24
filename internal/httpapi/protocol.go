@@ -90,5 +90,5 @@ func commandMeta(r *http.Request) (application.CommandMeta, error) {
 	if err != nil || version < 0 {
 		return application.CommandMeta{}, domain.FieldError("X-Expected-Version", "版本头必须是非负整数")
 	}
-	return application.CommandMeta{ActorID: actor, Role: role, RequestID: requestID, IdempotencyKey: key, ExpectedVersion: version}, nil
+	return application.CommandMeta{Context: r.Context(), ActorID: actor, Role: role, RequestID: requestID, IdempotencyKey: key, ExpectedVersion: version}, nil
 }
