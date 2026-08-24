@@ -25,6 +25,7 @@ type FileStore struct {
 	batches                                                            map[string]*domain.Aggregate
 	idempotency                                                        map[string]IdempotencyRecord
 	events                                                             []audit.EventRecord
+	eventCache                                                         map[string][]audit.EventRecord
 	chainHead                                                          string
 }
 
@@ -32,7 +33,7 @@ func Open(root string) (*FileStore, error) {
 	if root == "" {
 		return nil, fmt.Errorf("数据目录不能为空")
 	}
-	s := &FileStore{root: root, objectDir: filepath.Join(root, "objects"), tmpDir: filepath.Join(root, "tmp"), projectionDir: filepath.Join(root, "projections"), eventPath: filepath.Join(root, "events.jsonl"), idempotencyPath: filepath.Join(root, "idempotency.json"), batches: map[string]*domain.Aggregate{}, idempotency: map[string]IdempotencyRecord{}}
+	s := &FileStore{root: root, objectDir: filepath.Join(root, "objects"), tmpDir: filepath.Join(root, "tmp"), projectionDir: filepath.Join(root, "projections"), eventPath: filepath.Join(root, "events.jsonl"), idempotencyPath: filepath.Join(root, "idempotency.json"), batches: map[string]*domain.Aggregate{}, idempotency: map[string]IdempotencyRecord{}, eventCache: map[string][]audit.EventRecord{}}
 	for _, dir := range []string{s.root, s.objectDir, s.tmpDir, s.projectionDir} {
 		if err := os.MkdirAll(dir, 0750); err != nil {
 			return nil, err
@@ -72,15 +73,19 @@ func (s *FileStore) List() []domain.SoundscapeBatch {
 }
 func (s *FileStore) ChainHead() string { s.mu.RLock(); defer s.mu.RUnlock(); return s.chainHead }
 func (s *FileStore) Events(batchID string) []audit.EventRecord {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if cached, ok := s.eventCache[batchID]; ok {
+		return append([]audit.EventRecord(nil), cached...)
+	}
 	out := []audit.EventRecord{}
 	for _, event := range s.events {
 		if batchID == "" || event.BatchID == batchID {
 			out = append(out, event)
 		}
 	}
-	return out
+	s.eventCache[batchID] = append([]audit.EventRecord(nil), out...)
+	return append([]audit.EventRecord(nil), out...)
 }
 func (s *FileStore) Idempotency(key string) (IdempotencyRecord, bool) {
 	s.mu.RLock()
