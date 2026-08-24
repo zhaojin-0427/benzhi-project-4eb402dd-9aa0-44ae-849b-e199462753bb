@@ -43,6 +43,10 @@ func New(config Config) (*Service, error) {
 	return &Service{store: config.Store, clock: config.Clock, ids: config.IDFactory, evidence: audit.NewEvidenceService(config.Clock, config.IDFactory), mailboxes: newMailboxRegistry(), maxUploadBytes: config.MaxUploadBytes}, nil
 }
 
+func (s *Service) Close() {
+	s.mailboxes.close()
+}
+
 func randomID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {

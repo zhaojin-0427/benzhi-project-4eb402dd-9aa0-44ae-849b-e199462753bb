@@ -65,6 +65,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	defer app.Close()
 	api := httpapi.New(app)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {

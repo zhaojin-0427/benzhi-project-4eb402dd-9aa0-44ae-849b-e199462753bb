@@ -12,8 +12,9 @@ type mailboxAnswer struct {
 	err   error
 }
 type mailboxRegistry struct {
-	mu    sync.Mutex
-	boxes map[string]*mailbox
+	mu        sync.Mutex
+	boxes     map[string]*mailbox
+	closeOnce sync.Once
 }
 
 func newMailboxRegistry() *mailboxRegistry { return &mailboxRegistry{boxes: map[string]*mailbox{}} }
@@ -39,4 +40,14 @@ func (m *mailbox) do(run func() (any, error)) (any, error) {
 	m.requests <- mailboxRequest{run: run, answer: answer}
 	result := <-answer
 	return result.value, result.err
+}
+
+func (r *mailboxRegistry) close() {
+	r.closeOnce.Do(func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		for _, box := range r.boxes {
+			close(box.requests)
+		}
+	})
 }
