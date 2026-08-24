@@ -5,16 +5,19 @@ import (
 	"encoding/hex"
 	"fmt"
 	"soundledger/internal/domain"
+	"sync"
 	"time"
 )
 
 type EvidenceService struct {
-	now func() time.Time
-	id  func() string
+	now       func() time.Time
+	id        func() string
+	mu        sync.RWMutex
+	manifests map[string]domain.Manifest
 }
 
 func NewEvidenceService(now func() time.Time, id func() string) *EvidenceService {
-	return &EvidenceService{now: now, id: id}
+	return &EvidenceService{now: now, id: id, manifests: map[string]domain.Manifest{}}
 }
 
 func (s *EvidenceService) BuildManifest(aggregate *domain.Aggregate) (domain.Manifest, error) {
@@ -25,12 +28,24 @@ func (s *EvidenceService) BuildManifest(aggregate *domain.Aggregate) (domain.Man
 		return domain.Manifest{}, err
 	}
 	m.Digest = digest
+	s.mu.Lock()
+	s.manifests[m.BatchID] = m
+	s.mu.Unlock()
 	return m, nil
 }
 
 func (s *EvidenceService) IssueCertificate(batchID, manifestDigest, chainHead, approvedBy string) (domain.ReleaseCertificate, error) {
 	if manifestDigest == "" || chainHead == "" || approvedBy == "" {
 		return domain.ReleaseCertificate{}, fmt.Errorf("证书输入不完整")
+	}
+	s.mu.RLock()
+	registered, ok := s.manifests[batchID]
+	s.mu.RUnlock()
+	if !ok {
+		return domain.ReleaseCertificate{}, fmt.Errorf("冻结清单尚未登记")
+	}
+	if registered.Digest != manifestDigest {
+		return domain.ReleaseCertificate{}, fmt.Errorf("冻结清单摘要与登记记录不一致")
 	}
 	issued := s.now().UTC()
 	material := struct {
