@@ -90,13 +90,6 @@ func (s *FileStore) Idempotency(key string) (IdempotencyRecord, bool) {
 }
 
 func cloneAggregate(source *domain.Aggregate) (*domain.Aggregate, error) {
-	b, err := json.Marshal(source)
-	if err != nil {
-		return nil, err
-	}
-	var copy domain.Aggregate
-	if err = json.Unmarshal(b, &copy); err != nil {
-		return nil, err
-	}
+	copy := *source
 	return &copy, nil
 }
