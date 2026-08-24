@@ -249,6 +249,7 @@ func (s *Service) Publish(command PublishCommand) (PublishResult, error) {
 	if err := validateMeta(command.Meta, RolePublisher); err != nil {
 		return PublishResult{}, err
 	}
+	chainHead := s.store.ChainHead()
 	value, err := s.mailboxes.forBatch(command.BatchID).do(func() (any, error) {
 		var cached PublishResult
 		if ok, err := s.idempotent(command.Meta.IdempotencyKey, "publish", command.BatchID, &cached); ok || err != nil {
@@ -261,7 +262,7 @@ func (s *Service) Publish(command PublishCommand) (PublishResult, error) {
 		if aggregate.Manifest == nil {
 			return nil, domain.NewError(domain.ErrInvalidState, "冻结清单不存在")
 		}
-		certificate, err := s.evidence.IssueCertificate(command.BatchID, aggregate.Manifest.Digest, s.store.ChainHead(), command.Meta.ActorID)
+		certificate, err := s.evidence.IssueCertificate(command.BatchID, aggregate.Manifest.Digest, chainHead, command.Meta.ActorID)
 		if err != nil {
 			return nil, err
 		}
